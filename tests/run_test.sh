@@ -10,7 +10,7 @@ INPUT="${SCRIPT_DIR}/test_losing_input.txt"
 
 if [[ ! -f "$BOT" ]]; then
   echo "Compilation du bot..."
-  (cd "$PROJECT_DIR" && g++ -std=c++17 -O2 -o bot src/main.cpp)
+  (cd "$PROJECT_DIR" && g++ -std=c++17 -O2 -o bot src/main.cpp src/Game.cpp)
 fi
 
 if [[ ! -f "$INPUT" ]]; then
