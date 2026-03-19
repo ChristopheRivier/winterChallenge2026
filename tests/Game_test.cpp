@@ -104,18 +104,17 @@ TEST_F(GameWithFixedParams, IsPlatform) {
 
 // Snake 3 tête (31,4) : (32,3) hors d'atteinte (gravité). (29,6) aussi car chemin bloqué par le corps (31,5).
 TEST_F(GameWithFixedParams, Snake3_Energy_32_3_Unreachable_By_Gravity) {
-    const Point head3(31, 4);
-    std::set<Point> my_body = {Point(31, 4), Point(31, 5), Point(31, 6)};
-    Point tail3(31, 6);
+    Snake snake3(parse_body("31,4:31,5:31,6"));
+    std::set<Point> my_body = snake3.body_set();
     std::set<Point> others_body;
     for (const Snakebot& bot : g.opp_snakebots) {
         for (const Point& p : bot.body) others_body.insert(p);
     }
-    std::set<Point> blocked = g.blocked_cells(my_body, tail3, others_body);
+    std::set<Point> blocked = g.blocked_cells(my_body, snake3.tail(), others_body);
     std::set<Point> solid = g.solid_cells(my_body, others_body, energy);
     std::map<Point, int> dist;
     std::map<Point, Point> parent;
-    g.bfs_with_gravity(head3, blocked, solid, dist, parent);
+    g.bfs_with_gravity(snake3, blocked, solid, dist, parent);
     EXPECT_EQ(dist.count(Point(32, 3)), 0u)
         << "Énergie (32,3) ne doit pas être atteignable depuis (31,4) à cause de la gravité";
     // (29,6) inaccessible sans traverser (31,5) qui est bloqué par notre corps
@@ -130,6 +129,11 @@ TEST_F(GameWithFixedParams, RecalculatePossibleActionsNoCrash) {
     bool snake3_has_action = std::any_of(g.actions.begin(), g.actions.end(),
         [](const std::string& a) { return a.size() >= 1 && a[0] == '3' && a.find(' ') != std::string::npos; });
     EXPECT_TRUE(snake3_has_action) << "Snake 3 doit avoir une action valide";
+
+    // vérifie que snake 3 va vers la gauche
+    bool snake3_has_left_action = std::any_of(g.actions.begin(), g.actions.end(),
+        [](const std::string& a) { return a.size() >= 1 && a[0] == '3' && a.find("UP") != std::string::npos; });
+    EXPECT_TRUE(snake3_has_left_action) << "Snake 3 doit avoir une action qui va vers la gauche";
 }
 
 TEST_F(GameWithFixedParams, RecalculatePossibleActionsValidFormat) {
@@ -168,15 +172,13 @@ TEST_F(GameWithFixedParams, ParseBody) {
 }
 
 TEST_F(GameWithFixedParams, FirstStepTowardNearestReachableEnergy) {
-    Point head(29, 17);
-    std::set<Point> my_body = {head, Point(29, 18), Point(29, 19)};
-    Point tail(29, 19);
+    Snake snake(parse_body("29,17:29,18:29,19"));
     std::set<Point> others_body;
     for (const Snakebot& bot : g.opp_snakebots) {
         for (const Point& p : bot.body) others_body.insert(p);
     }
     Point step_dir = g.first_step_toward_nearest_reachable_energy(
-        head, my_body, tail, others_body, energy);
+        snake, others_body, energy);
     // Retourne un vecteur direction unitaire (UP/DOWN/LEFT/RIGHT) ou (-1,-1) si aucune cible
     if (step_dir.x != -1 || step_dir.y != -1) {
         EXPECT_EQ(std::abs(step_dir.x) + std::abs(step_dir.y), 1)

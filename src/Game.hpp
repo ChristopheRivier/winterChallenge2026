@@ -29,6 +29,23 @@ struct Point {
     bool operator!=(const Point& o) const { return x != o.x || y != o.y; }
 };
 
+/** Serpent : coordonnées de la tête (body[0]) et du corps (body[1..n]). */
+class Snake {
+public:
+    std::vector<Point> body;
+
+    Snake() = default;
+    explicit Snake(const std::vector<Point>& body) : body(body) {}
+
+    bool empty() const { return body.empty(); }
+    Point head() const { return body.empty() ? Point() : body[0]; }
+    Point tail() const { return body.empty() ? Point() : body.back(); }
+    /** Ensemble des cases occupées par le corps (tête incluse). */
+    std::set<Point> body_set() const {
+        return std::set<Point>(body.begin(), body.end());
+    }
+};
+
 struct Snakebot {
     int id;
     std::vector<Point> body;
@@ -40,6 +57,8 @@ struct Snakebot {
 
     bool empty() const { return body.empty(); }
     Point head() const { return body.empty() ? Point() : body[0]; }
+    /** Vue du bot comme Snake (tête + corps). */
+    Snake as_snake() const { return Snake(body); }
 };
 
 
@@ -153,6 +172,14 @@ public:
         return solid.count(below) != 0;
     }
 
+    /** True si au moins un segment du snake est sur une plateforme (mur). */
+    bool has_platform_contact(const Snake& path_snake) const {
+        for (const Point& p : path_snake.body) {
+            if (is_platform(p.x, p.y-1)) return true;
+        }
+        return false;
+    }
+
     /** Déplace la tête d'une case dans la direction delta. S'arrête (n'entre pas) si la case
      *  est un mur (blocked) ou si le snake n'est plus sur un mur (case non supportée). */
     bool can_step(Point cur, const Point& delta, const std::set<Point>& blocked,
@@ -165,20 +192,22 @@ public:
         return true;
     }
 
-    /** BFS récursif depuis start avec gravité : on bouge le snake case par case.
-     *  Condition d'arrêt : un mur arrête le mouvement ; on n'entre pas sur une case non supportée
-     *  (snake plus sur un mur). parent_direction[n] = vecteur unitaire parent -> n. */
-    void bfs_with_gravity(const Point& start, const std::set<Point>& blocked,
+    /** BFS récursif depuis la tête du snake avec gravité : on bouge le snake case par case.
+     *  À chaque pas, le chemin (path_snake) doit garder au moins un segment en contact avec un mur.
+     *  parent_direction[n] = vecteur unitaire parent -> n. */
+    void bfs_with_gravity(const Snake& snake, const std::set<Point>& blocked,
                          const std::set<Point>& solid,
                          std::map<Point, int>& dist, std::map<Point, Point>& parent,
                          std::map<Point, Point>* parent_direction = nullptr) const {
         dist.clear();
         parent.clear();
         if (parent_direction) parent_direction->clear();
+        if (snake.empty()) return;
         static const std::vector<Point> deltas = {{0,-1},{0,1},{-1,0},{1,0}};
 
-        std::function<void(Point, int)> rec;
-        rec = [&](Point cur, int d) {
+        std::function<void(Snake, int)> rec;
+        rec = [&](Snake path_snake, int d) {
+            Point cur = path_snake.tail();
             auto it = dist.find(cur);
             if (it != dist.end() && it->second <= d) return;
             dist[cur] = d;
@@ -186,30 +215,39 @@ public:
             Point n;
             for (const Point& delta : deltas) {
                 if (!can_step(cur, delta, blocked, solid, n)) continue;
+                Snake next_snake;
+                next_snake.body = path_snake.body;
+                next_snake.body.push_back(n);
+                if (!has_platform_contact(next_snake)) continue;
                 int nd = d + 1;
                 auto nit = dist.find(n);
                 if (nit == dist.end() || nit->second > nd) {
                     parent[n] = cur;
                     if (parent_direction) (*parent_direction)[n] = delta;
-                    rec(n, nd);
+                    rec(next_snake, nd);
                 }
             }
         };
-        rec(start, 0);
+        Snake start_path;
+        start_path.body.push_back(snake.head());
+        rec(start_path, 0);
     }
 
     /** Trouve l’énergie atteignable la plus proche en tenant compte de la gravité
      *  (sans traverser murs ni autres snakes, uniquement sur cases supportées).
      *  Retourne le vecteur unitaire de la direction à prendre (premier slide), ou (-1,-1) si aucune. */
-    Point first_step_toward_nearest_reachable_energy(const Point& head,
-            const std::set<Point>& my_body_set, const Point& my_tail,
+    Point first_step_toward_nearest_reachable_energy(const Snake& my_snake,
             const std::set<Point>& others_body, const std::set<Point>& energy) const {
+        if (my_snake.empty()) return Point(-1, -1);
+        std::set<Point> my_body_set = my_snake.body_set();
+        Point head = my_snake.head();
+        Point my_tail = my_snake.tail();
         std::set<Point> blocked = blocked_cells(my_body_set, my_tail, others_body);
         std::set<Point> solid = solid_cells(my_body_set, others_body, energy);
         std::map<Point, int> dist;
         std::map<Point, Point> parent;
         std::map<Point, Point> parent_direction;
-        bfs_with_gravity(head, blocked, solid, dist, parent, &parent_direction);
+        bfs_with_gravity(my_snake, blocked, solid, dist, parent, &parent_direction);
 
         Point best_energy;
         int best_dist = std::numeric_limits<int>::max();
@@ -242,11 +280,11 @@ public:
         for (const Snakebot& bot : my_snakebots) {
             if (bot.empty()) continue;
 
-            const std::vector<Point>& body = bot.body;
-            Point head = body[0];
-            Point tail = body.back();
+            Snake snake = bot.as_snake();
+            Point head = snake.head();
+            Point tail = snake.tail();
             std::string cur_dir = last_direction.count(bot.id) ? last_direction[bot.id] : UP;
-            std::set<Point> my_body_set(body.begin(), body.end());
+            std::set<Point> my_body_set = snake.body_set();
 
             std::set<Point> others_body;
             for (const Snakebot& other : my_snakebots) {
@@ -258,7 +296,7 @@ public:
             }
 
             Point step_dir = first_step_toward_nearest_reachable_energy(
-                head, my_body_set, tail, others_body, energy);
+                snake, others_body, energy);
 
             std::string best_dir = cur_dir;
             bool found = false;
