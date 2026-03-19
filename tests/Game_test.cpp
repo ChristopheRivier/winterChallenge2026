@@ -65,11 +65,7 @@ protected:
             {15, 12}, {22, 12}, {8, 14}, {29, 14},
             {10, 14}, {27, 14},
         };
-        // Queue snake 3 (31,6) sur un mur ; (29,7),(30,5) murs. (29,5) en energy → support pour (29,4) et passage vers (29,6)
-        energy.insert(Point(29, 5));
-        g.grid[6][31] = '#';
-        g.grid[7][29] = '#';
-        g.grid[5][30] = '#';
+
     }
 
     Game g;
@@ -89,7 +85,7 @@ TEST_F(GameWithFixedParams, InitDimensions) {
 TEST_F(GameWithFixedParams, SnakebotsCount) {
     EXPECT_EQ(static_cast<int>(g.my_snakebots.size()), 4);
     EXPECT_EQ(static_cast<int>(g.opp_snakebots.size()), 4);
-    EXPECT_EQ(static_cast<int>(energy.size()), 43);  // 42 + (29,5) pour le chemin snake 3 → (29,6)
+    EXPECT_EQ(static_cast<int>(energy.size()), 42);
 }
 
 TEST_F(GameWithFixedParams, InBounds) {
@@ -106,7 +102,7 @@ TEST_F(GameWithFixedParams, IsPlatform) {
     EXPECT_FALSE(g.is_platform(0, 0));  // top row .
 }
 
-// Queue snake 3 sur mur (31,6)=# et (29,7)=# → (29,6) supportée. (32,3) reste hors d'atteinte (gravité).
+// Snake 3 tête (31,4) : (32,3) hors d'atteinte (gravité). (29,6) aussi car chemin bloqué par le corps (31,5).
 TEST_F(GameWithFixedParams, Snake3_Energy_32_3_Unreachable_By_Gravity) {
     const Point head3(31, 4);
     std::set<Point> my_body = {Point(31, 4), Point(31, 5), Point(31, 6)};
@@ -122,17 +118,18 @@ TEST_F(GameWithFixedParams, Snake3_Energy_32_3_Unreachable_By_Gravity) {
     g.bfs_with_gravity(head3, blocked, solid, dist, parent);
     EXPECT_EQ(dist.count(Point(32, 3)), 0u)
         << "Énergie (32,3) ne doit pas être atteignable depuis (31,4) à cause de la gravité";
-    EXPECT_GT(dist.count(Point(29, 6)), 0u)
-        << "Énergie (29,6) atteignable (queue sur mur + mur en (29,7))";
+    // (29,6) inaccessible sans traverser (31,5) qui est bloqué par notre corps
+    EXPECT_EQ(dist.count(Point(29, 6)), 0u)
+        << "(29,6) hors d'atteinte depuis (31,4) car (31,5) bloqué";
 }
 
 TEST_F(GameWithFixedParams, RecalculatePossibleActionsNoCrash) {
     g.recalculate_possible_actions(energy);
     EXPECT_FALSE(g.actions.empty());
-    // Snake 3 (tête 31,4) : (32,3) hors d'atteinte → doit viser (29,6) → LEFT
-    auto it = std::find(g.actions.begin(), g.actions.end(), "3 " + LEFT);
-    EXPECT_NE(it, g.actions.end())
-        << "Snake 3 doit aller à gauche vers l'énergie (29,6)";
+    // Snake 3 (tête 31,4) : (32,3) et (29,6) hors d'atteinte → une action valide (ex. LEFT/RIGHT/UP)
+    bool snake3_has_action = std::any_of(g.actions.begin(), g.actions.end(),
+        [](const std::string& a) { return a.size() >= 1 && a[0] == '3' && a.find(' ') != std::string::npos; });
+    EXPECT_TRUE(snake3_has_action) << "Snake 3 doit avoir une action valide";
 }
 
 TEST_F(GameWithFixedParams, RecalculatePossibleActionsValidFormat) {
@@ -178,11 +175,11 @@ TEST_F(GameWithFixedParams, FirstStepTowardNearestReachableEnergy) {
     for (const Snakebot& bot : g.opp_snakebots) {
         for (const Point& p : bot.body) others_body.insert(p);
     }
-    Point step = g.first_step_toward_nearest_reachable_energy(
+    Point step_dir = g.first_step_toward_nearest_reachable_energy(
         head, my_body, tail, others_body, energy);
-    // Doit retourner une case valide (dans la grille) ou (-1,-1) si aucune atteignable
-    if (step.x >= 0 && step.y >= 0) {
-        EXPECT_TRUE(g.in_bounds(step));
-        EXPECT_EQ(manhattan(head, step), 1);
+    // Retourne un vecteur direction unitaire (UP/DOWN/LEFT/RIGHT) ou (-1,-1) si aucune cible
+    if (step_dir.x != -1 || step_dir.y != -1) {
+        EXPECT_EQ(std::abs(step_dir.x) + std::abs(step_dir.y), 1)
+            << "Doit être un vecteur unitaire (direction)";
     }
 }

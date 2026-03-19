@@ -8,6 +8,7 @@
 #include <set>
 #include <queue>
 #include <limits>
+#include <functional>
 
 
 const std::string UP = "UP";
@@ -152,37 +153,54 @@ public:
         return solid.count(below) != 0;
     }
 
-    /** BFS depuis start en tenant compte de la gravité : on ne peut aller que sur des cases supportées.
-     *  Évite blocked, n’ajoute un voisin que s’il est supporté (sol ou solide en dessous). */
+    /** Déplace la tête d'une case dans la direction delta. S'arrête (n'entre pas) si la case
+     *  est un mur (blocked) ou si le snake n'est plus sur un mur (case non supportée). */
+    bool can_step(Point cur, const Point& delta, const std::set<Point>& blocked,
+                  const std::set<Point>& solid, Point& out_next) const {
+        Point n = cur + delta;
+        if (!in_bounds(n)) return false;
+        if (blocked.count(n)) return false;  // un mur arrête le mouvement
+        if (!is_supported(n, solid)) return false;  // snake n'est plus sur un mur
+        out_next = n;
+        return true;
+    }
+
+    /** BFS récursif depuis start avec gravité : on bouge le snake case par case.
+     *  Condition d'arrêt : un mur arrête le mouvement ; on n'entre pas sur une case non supportée
+     *  (snake plus sur un mur). parent_direction[n] = vecteur unitaire parent -> n. */
     void bfs_with_gravity(const Point& start, const std::set<Point>& blocked,
                          const std::set<Point>& solid,
-                         std::map<Point, int>& dist, std::map<Point, Point>& parent) const {
+                         std::map<Point, int>& dist, std::map<Point, Point>& parent,
+                         std::map<Point, Point>* parent_direction = nullptr) const {
         dist.clear();
         parent.clear();
-        dist[start] = 0;
-        std::queue<Point> q;
-        q.push(start);
+        if (parent_direction) parent_direction->clear();
         static const std::vector<Point> deltas = {{0,-1},{0,1},{-1,0},{1,0}};
-        while (!q.empty()) {
-            Point cur = q.front();
-            q.pop();
-            int d = dist[cur];
+
+        std::function<void(Point, int)> rec;
+        rec = [&](Point cur, int d) {
+            auto it = dist.find(cur);
+            if (it != dist.end() && it->second <= d) return;
+            dist[cur] = d;
+
+            Point n;
             for (const Point& delta : deltas) {
-                Point n = cur + delta;
-                if (!in_bounds(n)) continue;
-                if (blocked.count(n)) continue;
-                if (dist.count(n)) continue;
-                if (!is_supported(n, solid)) continue;  // gravité : pas de case en l’air
-                dist[n] = d + 1;
-                parent[n] = cur;
-                q.push(n);
+                if (!can_step(cur, delta, blocked, solid, n)) continue;
+                int nd = d + 1;
+                auto nit = dist.find(n);
+                if (nit == dist.end() || nit->second > nd) {
+                    parent[n] = cur;
+                    if (parent_direction) (*parent_direction)[n] = delta;
+                    rec(n, nd);
+                }
             }
-        }
+        };
+        rec(start, 0);
     }
 
     /** Trouve l’énergie atteignable la plus proche en tenant compte de la gravité
      *  (sans traverser murs ni autres snakes, uniquement sur cases supportées).
-     *  Retourne la première étape depuis head vers cette énergie, ou point invalide si aucune. */
+     *  Retourne le vecteur unitaire de la direction à prendre (premier slide), ou (-1,-1) si aucune. */
     Point first_step_toward_nearest_reachable_energy(const Point& head,
             const std::set<Point>& my_body_set, const Point& my_tail,
             const std::set<Point>& others_body, const std::set<Point>& energy) const {
@@ -190,7 +208,8 @@ public:
         std::set<Point> solid = solid_cells(my_body_set, others_body, energy);
         std::map<Point, int> dist;
         std::map<Point, Point> parent;
-        bfs_with_gravity(head, blocked, solid, dist, parent);
+        std::map<Point, Point> parent_direction;
+        bfs_with_gravity(head, blocked, solid, dist, parent, &parent_direction);
 
         Point best_energy;
         int best_dist = std::numeric_limits<int>::max();
@@ -203,13 +222,16 @@ public:
             }
         }
         if (best_dist == std::numeric_limits<int>::max()) return Point(-1, -1);
+        if (best_dist == 0) return Point(0, 0);  // déjà sur l'énergie
 
-        if (best_dist == 0) return head;
         Point cur = best_energy;
         while (parent.count(cur) && parent.at(cur) != head) {
             cur = parent.at(cur);
         }
-        return (parent.count(cur) && parent.at(cur) == head) ? cur : Point(-1, -1);
+        // cur = première cellule après head (après un slide) ; direction = parent_direction[cur]
+        if (parent.count(cur) && parent.at(cur) == head && parent_direction.count(cur))
+            return parent_direction.at(cur);
+        return Point(-1, -1);
     }
 
     /** Recalcule les actions possibles et remplit `actions` pour les miens.
@@ -235,19 +257,15 @@ public:
                 for (const Point& p : other.body) others_body.insert(p);
             }
 
-            Point next_cell = first_step_toward_nearest_reachable_energy(
+            Point step_dir = first_step_toward_nearest_reachable_energy(
                 head, my_body_set, tail, others_body, energy);
 
             std::string best_dir = cur_dir;
             bool found = false;
-            if (next_cell.x >= 0 && next_cell.y >= 0) {
-                Point delta(next_cell.x - head.x, next_cell.y - head.y);
-                std::string dir = point_to_dir(delta);
-                Point test = head + dir_to_point(dir);
-                if (test.x == next_cell.x && test.y == next_cell.y) {
-                    best_dir = dir;
-                    found = true;
-                }
+            // step_dir = vecteur unitaire (UP/DOWN/LEFT/RIGHT) ou (-1,-1) si aucune cible
+            if (std::abs(step_dir.x) + std::abs(step_dir.y) == 1) {
+                best_dir = point_to_dir(step_dir);
+                found = true;
             }
 
             if (!found) {
