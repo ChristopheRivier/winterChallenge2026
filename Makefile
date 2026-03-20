@@ -18,4 +18,4 @@ build_debug: build_dir
 	cmake --build .
 debug: build_debug
 	cd build && \
-	sudo lldb -- ./Game_test --gtest_filter=GameWithFixedParams.RecalculatePossibleActionsNoCrash
+	sudo lldb -- ./Game_test --gtest_filter=GameWithFixedParams.Snake3_BfsExploresReachableHeadPositions

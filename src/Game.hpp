@@ -6,7 +6,7 @@
 #include <vector>
 #include <map>
 #include <set>
-#include <queue>
+
 #include <limits>
 #include <functional>
 
@@ -40,6 +40,14 @@ public:
     bool empty() const { return body.empty(); }
     Point head() const { return body.empty() ? Point() : body[0]; }
     Point tail() const { return body.empty() ? Point() : body.back(); }
+    void move_head(const Point& p) {
+        body.insert(body.begin(), p);
+        body.pop_back();
+    }
+    void move(const Point& delta) {
+        body.insert(body.begin(), head() + delta);
+        body.pop_back();
+    }
     /** Ensemble des cases occupées par le corps (tête incluse). */
     std::set<Point> body_set() const {
         return std::set<Point>(body.begin(), body.end());
@@ -63,7 +71,7 @@ struct Snakebot {
 
 
 
-std::vector<Point> parse_body(const std::string& body) {
+inline std::vector<Point> parse_body(const std::string& body) {
     std::vector<Point> segs;
     std::string s = body;
     for (char& c : s) if (c == ';' || c == ':') c = ' ';
@@ -80,7 +88,7 @@ std::vector<Point> parse_body(const std::string& body) {
     return segs;
 }
 
-Point dir_to_point(const std::string& d) {
+inline Point dir_to_point(const std::string& d) {
     if (d == UP) return Point(0, -1);
     if (d == DOWN) return Point(0, 1);
     if (d == LEFT) return Point(-1, 0);
@@ -88,7 +96,7 @@ Point dir_to_point(const std::string& d) {
     return Point(0, -1);
 }
 
-std::string point_to_dir(const Point& p) {
+inline std::string point_to_dir(const Point& p) {
     if (p.x == 0 && p.y == -1) return UP;
     if (p.x == 0 && p.y == 1) return DOWN;
     if (p.x == -1 && p.y == 0) return LEFT;
@@ -96,7 +104,7 @@ std::string point_to_dir(const Point& p) {
     return UP;
 }
 
-int manhattan(const Point& a, const Point& b) {
+inline int manhattan(const Point& a, const Point& b) {
     return std::abs(a.x - b.x) + std::abs(a.y - b.y);
 }
 
@@ -172,10 +180,18 @@ public:
         return solid.count(below) != 0;
     }
 
-    /** True si au moins un segment du snake est sur une plateforme (mur). */
-    bool has_platform_contact(const Snake& path_snake) const {
+    /** True si au moins un segment repose sur le sol, un mur, une énergie ou un corps (support en dessous). */
+    bool has_platform_contact(const Snake& path_snake, const std::set<Point>& energy,
+                              const std::set<Point>& others_body) const {
+        std::set<Point> my_seg(path_snake.body.begin(), path_snake.body.end());
         for (const Point& p : path_snake.body) {
-            if (is_platform(p.x, p.y-1)) return true;
+            if (p.y == height - 1) return true;
+            Point below(p.x, p.y + 1);
+            if (!in_bounds(below)) continue;
+            if (is_platform(below.x, below.y)) return true;
+            if (energy.count(below)) return true;
+            if (others_body.count(below)) return true;
+            if (my_seg.count(below)) return true;
         }
         return false;
     }
@@ -183,11 +199,10 @@ public:
     /** Déplace la tête d'une case dans la direction delta. S'arrête (n'entre pas) si la case
      *  est un mur (blocked) ou si le snake n'est plus sur un mur (case non supportée). */
     bool can_step(Point cur, const Point& delta, const std::set<Point>& blocked,
-                  const std::set<Point>& solid, Point& out_next) const {
+                  Point& out_next) const {
         Point n = cur + delta;
         if (!in_bounds(n)) return false;
         if (blocked.count(n)) return false;  // un mur arrête le mouvement
-        if (!is_supported(n, solid)) return false;  // snake n'est plus sur un mur
         out_next = n;
         return true;
     }
@@ -196,7 +211,7 @@ public:
      *  À chaque pas, le chemin (path_snake) doit garder au moins un segment en contact avec un mur.
      *  parent_direction[n] = vecteur unitaire parent -> n. */
     void bfs_with_gravity(const Snake& snake, const std::set<Point>& blocked,
-                         const std::set<Point>& solid,
+                         const std::set<Point>& energy, const std::set<Point>& others_body,
                          std::map<Point, int>& dist, std::map<Point, Point>& parent,
                          std::map<Point, Point>* parent_direction = nullptr) const {
         dist.clear();
@@ -207,29 +222,38 @@ public:
 
         std::function<void(Snake, int)> rec;
         rec = [&](Snake path_snake, int d) {
-            Point cur = path_snake.tail();
+            Point cur = path_snake.head();
             auto it = dist.find(cur);
             if (it != dist.end() && it->second <= d) return;
+            if(d > 6) return;
             dist[cur] = d;
+            if (energy.count(cur)) {
+                return;
+            }
 
             Point n;
             for (const Point& delta : deltas) {
-                if (!can_step(cur, delta, blocked, solid, n)) continue;
+                if (!can_step(cur, delta, blocked, n)) continue;
                 Snake next_snake;
                 next_snake.body = path_snake.body;
-                next_snake.body.push_back(n);
-                if (!has_platform_contact(next_snake)) continue;
+                next_snake.move(delta);
+                if (!has_platform_contact(next_snake, energy, others_body)) {
+                    while (!has_platform_contact(next_snake, energy, others_body)) {
+                        next_snake.move(Point(0, 1));
+                    }
+                }
+                Point landing = next_snake.head();
                 int nd = d + 1;
-                auto nit = dist.find(n);
+                auto nit = dist.find(landing);
                 if (nit == dist.end() || nit->second > nd) {
-                    parent[n] = cur;
-                    if (parent_direction) (*parent_direction)[n] = delta;
+                    parent[landing] = cur;
+                    if (parent_direction) (*parent_direction)[landing] = delta;
                     rec(next_snake, nd);
                 }
             }
         };
         Snake start_path;
-        start_path.body.push_back(snake.head());
+        start_path.body = snake.body;
         rec(start_path, 0);
     }
 
@@ -243,11 +267,10 @@ public:
         Point head = my_snake.head();
         Point my_tail = my_snake.tail();
         std::set<Point> blocked = blocked_cells(my_body_set, my_tail, others_body);
-        std::set<Point> solid = solid_cells(my_body_set, others_body, energy);
         std::map<Point, int> dist;
         std::map<Point, Point> parent;
         std::map<Point, Point> parent_direction;
-        bfs_with_gravity(my_snake, blocked, solid, dist, parent, &parent_direction);
+        bfs_with_gravity(my_snake, blocked, energy, others_body, dist, parent, &parent_direction);
 
         Point best_energy;
         int best_dist = std::numeric_limits<int>::max();

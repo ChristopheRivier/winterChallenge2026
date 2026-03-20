@@ -20,7 +20,7 @@ FetchContent_MakeAvailable(googletest)
 
 # Tests unitaires Game
 enable_testing()
-add_executable(Game_test tests/Game_test.cpp)
+add_executable(Game_test tests/Game_test.cpp tests/Game_scenario_30x16_test.cpp)
 target_include_directories(Game_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(Game_test GTest::gtest_main)
 include(GoogleTest)
