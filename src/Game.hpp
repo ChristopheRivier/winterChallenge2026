@@ -59,8 +59,8 @@ struct Snakebot {
     std::vector<Point> body;
     std::string last_direction;
 
-    Snakebot() : id(-1), last_direction(UP) {}
-    Snakebot(int id, const std::vector<Point>& body, const std::string& last_dir = UP)
+    Snakebot() : id(-1), last_direction(RIGHT) {}
+    Snakebot(int id, const std::vector<Point>& body, const std::string& last_dir = RIGHT)
         : id(id), body(body), last_direction(last_dir) {}
 
     bool empty() const { return body.empty(); }
@@ -92,8 +92,7 @@ inline Point dir_to_point(const std::string& d) {
     if (d == UP) return Point(0, -1);
     if (d == DOWN) return Point(0, 1);
     if (d == LEFT) return Point(-1, 0);
-    if (d == RIGHT) return Point(1, 0);
-    return Point(0, -1);
+    return Point(1, 0);
 }
 
 inline std::string point_to_dir(const Point& p) {
@@ -101,7 +100,7 @@ inline std::string point_to_dir(const Point& p) {
     if (p.x == 0 && p.y == 1) return DOWN;
     if (p.x == -1 && p.y == 0) return LEFT;
     if (p.x == 1 && p.y == 0) return RIGHT;
-    return UP;
+    return RIGHT;
 }
 
 inline int manhattan(const Point& a, const Point& b) {
@@ -218,14 +217,14 @@ public:
         parent.clear();
         if (parent_direction) parent_direction->clear();
         if (snake.empty()) return;
-        static const std::vector<Point> deltas = {{0,-1},{0,1},{-1,0},{1,0}};
+        static const std::vector<Point> deltas = {{1,0},{0,1},{-1,0},{0,-1}};
 
         std::function<void(Snake, int)> rec;
         rec = [&](Snake path_snake, int d) {
             Point cur = path_snake.head();
             auto it = dist.find(cur);
             if (it != dist.end() && it->second <= d) return;
-            if(d > 6) return;
+            if(d > 10) return;
             dist[cur] = d;
             if (energy.count(cur)) {
                 return;
@@ -306,7 +305,7 @@ public:
             Snake snake = bot.as_snake();
             Point head = snake.head();
             Point tail = snake.tail();
-            std::string cur_dir = last_direction.count(bot.id) ? last_direction[bot.id] : UP;
+            std::string cur_dir = last_direction.count(bot.id) ? last_direction[bot.id] : RIGHT;
             std::set<Point> my_body_set = snake.body_set();
 
             std::set<Point> others_body;

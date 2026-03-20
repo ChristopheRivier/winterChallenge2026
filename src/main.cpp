@@ -43,7 +43,7 @@ int main(int argc, char* argv[])
     vector<int> opp_snakebot_ids(snakebots_per_player);
     for (int i = 0; i < snakebots_per_player; i++) {
         cin >> my_snakebot_ids[i]; cin.ignore();
-        g.last_direction[my_snakebot_ids[i]] = UP;
+        g.last_direction[my_snakebot_ids[i]] = RIGHT;
         if (debug) cerr << "my_snakebot_id=" << my_snakebot_ids[i] << endl;
     }
     for (int i = 0; i < snakebots_per_player; i++) {
@@ -78,7 +78,7 @@ int main(int argc, char* argv[])
             string body_str;
             cin >> snakebot_id >> body_str; cin.ignore();
             vector<Point> body = parse_body(body_str);
-            string last_dir = g.last_direction.count(snakebot_id) ? g.last_direction[snakebot_id] : UP;
+            string last_dir = g.last_direction.count(snakebot_id) ? g.last_direction[snakebot_id] : RIGHT;
             Snakebot bot(snakebot_id, body, last_dir);
             if (find(my_snakebot_ids.begin(), my_snakebot_ids.end(), snakebot_id) != my_snakebot_ids.end()) {
                 g.my_snakebots.push_back(bot);
