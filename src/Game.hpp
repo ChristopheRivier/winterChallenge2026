@@ -48,6 +48,11 @@ public:
         body.insert(body.begin(), head() + delta);
         body.pop_back();
     }
+    void snake_down() {
+        for (auto it = body.begin(); it != body.end(); it++) {
+            it->y++;
+        }
+    }
     /** Ensemble des cases occupées par le corps (tête incluse). */
     std::set<Point> body_set() const {
         return std::set<Point>(body.begin(), body.end());
@@ -183,6 +188,7 @@ public:
     bool has_platform_contact(const Snake& path_snake, const std::set<Point>& energy,
                               const std::set<Point>& others_body) const {
         std::set<Point> my_seg(path_snake.body.begin(), path_snake.body.end());
+        if(energy.count(path_snake.head())) return true;
         for (const Point& p : path_snake.body) {
             if (p.y == height - 1) return true;
             Point below(p.x, p.y + 1);
@@ -190,7 +196,7 @@ public:
             if (is_platform(below.x, below.y)) return true;
             if (energy.count(below)) return true;
             if (others_body.count(below)) return true;
-            if (my_seg.count(below)) return true;
+            //if (my_seg.count(below)) return true;
         }
         return false;
     }
@@ -218,6 +224,7 @@ public:
         if (parent_direction) parent_direction->clear();
         if (snake.empty()) return;
         static const std::vector<Point> deltas = {{1,0},{0,1},{-1,0},{0,-1}};
+        //static const std::vector<Point> deltas = {{-1,0}};
 
         std::function<void(Snake, int, Point)> rec;
         rec = [&](Snake path_snake, int d, Point first_delta_on_path) {
@@ -227,9 +234,18 @@ public:
             if(d > 10) return;
             dist[cur] = d;
             if (energy.count(cur)) {
+            /*    std::cout << "energy found at: " << cur.x << ", " << cur.y << " d: " << d << std::endl;
+                std::cout << "first_delta_on_path: " << first_delta_on_path.x << ", " << first_delta_on_path.y << std::endl;
+                if (parent_direction) {
+                    std::cout << "parent_direction: " << parent_direction->at(cur).x << ", " << parent_direction->at(cur).y << std::endl;
+                }else{
+                    std::cout << "parent_direction: null" << std::endl;
+                }*/
                 return;
             }
-
+            if (!has_platform_contact(path_snake, energy, others_body)){
+                return;
+            }
             Point n;
             for (const Point& delta : deltas) {
                 if (!can_step(cur, delta, blocked, n)) continue;
@@ -238,7 +254,7 @@ public:
                 next_snake.move(delta);
                 if (!has_platform_contact(next_snake, energy, others_body)) {
                     while (!has_platform_contact(next_snake, energy, others_body)) {
-                        next_snake.move(Point(0, 1));
+                        next_snake.snake_down();
                     }
                 }
                 Point landing = next_snake.head();
