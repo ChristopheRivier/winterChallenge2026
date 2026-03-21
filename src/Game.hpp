@@ -208,7 +208,7 @@ public:
 
     /** BFS récursif depuis la tête du snake avec gravité : on bouge le snake case par case.
      *  À chaque pas, le chemin (path_snake) doit garder au moins un segment en contact avec un mur.
-     *  parent_direction[n] = vecteur unitaire parent -> n. */
+     *  parent_direction[n] = premier delta (depuis la tête de départ) sur le chemin optimal vers n. */
     void bfs_with_gravity(const Snake& snake, const std::set<Point>& blocked,
                          const std::set<Point>& energy, const std::set<Point>& others_body,
                          std::map<Point, int>& dist, std::map<Point, Point>& parent,
@@ -219,8 +219,8 @@ public:
         if (snake.empty()) return;
         static const std::vector<Point> deltas = {{1,0},{0,1},{-1,0},{0,-1}};
 
-        std::function<void(Snake, int)> rec;
-        rec = [&](Snake path_snake, int d) {
+        std::function<void(Snake, int, Point)> rec;
+        rec = [&](Snake path_snake, int d, Point first_delta_on_path) {
             Point cur = path_snake.head();
             auto it = dist.find(cur);
             if (it != dist.end() && it->second <= d) return;
@@ -243,17 +243,18 @@ public:
                 }
                 Point landing = next_snake.head();
                 int nd = d + 1;
+                Point first_for_path = (d == 0) ? delta : first_delta_on_path;
                 auto nit = dist.find(landing);
                 if (nit == dist.end() || nit->second > nd) {
                     parent[landing] = cur;
-                    if (parent_direction) (*parent_direction)[landing] = delta;
-                    rec(next_snake, nd);
+                    if (parent_direction) (*parent_direction)[landing] = first_for_path;
+                    rec(next_snake, nd, first_for_path);
                 }
             }
         };
         Snake start_path;
         start_path.body = snake.body;
-        rec(start_path, 0);
+        rec(start_path, 0, Point(0, 0));
     }
 
     /** Trouve l’énergie atteignable la plus proche en tenant compte de la gravité

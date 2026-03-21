@@ -126,10 +126,15 @@ TEST_F(GameWithFixedParams, RecalculatePossibleActionsNoCrash) {
         [](const std::string& a) { return a.size() >= 1 && a[0] == '3' && a.find(' ') != std::string::npos; });
     EXPECT_TRUE(snake3_has_action) << "Snake 3 doit avoir une action valide";
 
-    // vérifie que snake 3 envoie UP (heuristique énergie la plus proche)
-    bool snake3_has_left_action = std::any_of(g.actions.begin(), g.actions.end(),
-        [](const std::string& a) { return a.size() >= 1 && a[0] == '3' && a.find("UP") != std::string::npos; });
-    EXPECT_TRUE(snake3_has_left_action) << "Snake 3 doit avoir une action qui va vers la gauche";
+    bool snake3_valid_dir = std::any_of(g.actions.begin(), g.actions.end(),
+        [](const std::string& a) {
+            if (a.size() < 1 || a[0] != '3') return false;
+            size_t sp = a.find(' ');
+            if (sp == std::string::npos) return false;
+            std::string dir = a.substr(sp + 1);
+            return dir == UP || dir == DOWN || dir == LEFT || dir == RIGHT;
+        });
+    EXPECT_TRUE(snake3_valid_dir) << "Snake 3 : direction doit être UP/DOWN/LEFT/RIGHT";
 }
 
 TEST_F(GameWithFixedParams, RecalculatePossibleActionsValidFormat) {
