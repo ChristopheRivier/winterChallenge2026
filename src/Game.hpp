@@ -360,6 +360,24 @@ public:
                 }
             }
 
+            /* Même case qu’au tour précédent : ne pas renvoyer la même direction (évite boucle). */
+            if (found && last_head_position.count(bot.id) && head == last_head_position[bot.id]
+                && best_dir == cur_dir) {
+                std::vector<std::string> dirs = {UP, DOWN, LEFT, RIGHT};
+                for (const std::string& d : dirs) {
+                    if (d == best_dir) continue;
+                    Point delta = dir_to_point(d);
+                    Point next_head = head + delta;
+                    if (!in_bounds(next_head)) continue;
+                    if (is_platform(next_head.x, next_head.y)) continue;
+                    if (my_body_set.count(next_head) && next_head != tail) continue;
+                    if (others_body.count(next_head)) continue;
+                    best_dir = d;
+                    break;
+                }
+            }
+
+            last_head_position[bot.id] = head;
             last_direction[bot.id] = best_dir;
             if (found) {
                 actions.push_back(std::to_string(bot.id) + " " + best_dir);
@@ -373,6 +391,8 @@ public:
 
     /** Dernière direction envoyée par snakebot id (pour éviter les demi-tours). */
     std::map<int, std::string> last_direction;
+    /** Tête au tour précédent (pour détecter l’immobilité et varier la direction). */
+    std::map<int, Point> last_head_position;
 };
 
 
