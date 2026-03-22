@@ -9,6 +9,7 @@
 
 #include <limits>
 #include <functional>
+#include <algorithm>
 
 
 const std::string UP = "UP";
@@ -312,9 +313,21 @@ public:
     }
 
     /** Recalcule les actions possibles et remplit `actions` pour les miens.
-     *  Chaque snakebot vise l’énergie atteignable la plus proche (sans murs ni autres snakes). */
+     *  Chaque snakebot vise l’énergie atteignable la plus proche (sans murs ni autres snakes).
+     *  Puis on évite que deux alliés visent la même case sur le premier pas (id plus petit prioritaire). */
     void recalculate_possible_actions(const std::set<Point>& energy) {
         clear_actions();
+
+        struct Plan {
+            int id;
+            Point head;
+            Point tail;
+            std::set<Point> my_body_set;
+            std::set<Point> others_body;
+            std::string best_dir;
+            bool found;
+        };
+        std::vector<Plan> plans;
 
         for (const Snakebot& bot : my_snakebots) {
             if (bot.empty()) continue;
@@ -377,10 +390,69 @@ public:
                 }
             }
 
-            last_head_position[bot.id] = head;
-            last_direction[bot.id] = best_dir;
-            if (found) {
-                actions.push_back(std::to_string(bot.id) + " " + best_dir);
+            Plan p;
+            p.id = bot.id;
+            p.head = head;
+            p.tail = tail;
+            p.my_body_set = std::move(my_body_set);
+            p.others_body = std::move(others_body);
+            p.best_dir = best_dir;
+            p.found = found;
+            plans.push_back(std::move(p));
+        }
+
+        std::sort(plans.begin(), plans.end(), [](const Plan& a, const Plan& b) {
+            return a.id < b.id;
+        });
+
+        auto valid_first_head = [&](const Plan& pl, const Point& nh) -> bool {
+            if (!in_bounds(nh)) return false;
+            if (is_platform(nh.x, nh.y)) return false;
+            if (pl.my_body_set.count(nh) && nh != pl.tail) return false;
+            if (pl.others_body.count(nh)) return false;
+            return true;
+        };
+
+        std::set<Point> claimed_next;
+        static const std::vector<std::string> kAllDirs = {UP, DOWN, LEFT, RIGHT};
+        for (Plan& p : plans) {
+            if (!p.found) continue;
+            Point nh = p.head + dir_to_point(p.best_dir);
+            if (valid_first_head(p, nh) && !claimed_next.count(nh)) {
+                claimed_next.insert(nh);
+                continue;
+            }
+            std::vector<std::string> try_order;
+            try_order.push_back(p.best_dir);
+            for (const std::string& d : kAllDirs) {
+                if (d != p.best_dir) try_order.push_back(d);
+            }
+            bool placed = false;
+            for (const std::string& d : try_order) {
+                Point cand = p.head + dir_to_point(d);
+                if (!valid_first_head(p, cand)) continue;
+                if (claimed_next.count(cand)) continue;
+                p.best_dir = d;
+                claimed_next.insert(cand);
+                placed = true;
+                break;
+            }
+            if (!placed) {
+                for (const std::string& d : try_order) {
+                    Point cand = p.head + dir_to_point(d);
+                    if (!valid_first_head(p, cand)) continue;
+                    p.best_dir = d;
+                    if (!claimed_next.count(cand)) claimed_next.insert(cand);
+                    break;
+                }
+            }
+        }
+
+        for (Plan& p : plans) {
+            last_head_position[p.id] = p.head;
+            last_direction[p.id] = p.best_dir;
+            if (p.found) {
+                actions.push_back(std::to_string(p.id) + " " + p.best_dir);
             }
         }
 

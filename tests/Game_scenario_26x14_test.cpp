@@ -62,7 +62,10 @@ TEST_F(GameScenario26x14, EnergyCount) {
 
 TEST_F(GameScenario26x14, RecalculatePossibleActionsTwoMySnakes) {
     g.recalculate_possible_actions(energy);
-    ASSERT_EQ(g.actions.size(), 2u) << "Deux bots alliés (id 0 et 2)";
+    /* Le bot 0 a la tête sur l’énergie (25,8) mais aucun pas légal adjacent (murs #, corps, bord) ;
+       seul le bot 2 reçoit une direction. */
+    ASSERT_EQ(g.actions.size(), 1u);
+    EXPECT_NE(g.actions[0].find("2 "), std::string::npos) << "Action attendue pour le bot 2: " << g.actions[0];
     for (const std::string& a : g.actions) {
         size_t space = a.find(' ');
         ASSERT_NE(space, std::string::npos) << "Action doit contenir un espace: " << a;
