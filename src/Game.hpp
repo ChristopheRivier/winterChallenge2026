@@ -366,7 +366,7 @@ public:
             }
 
             if (!found) {
-                std::vector<std::string> dirs = {UP, DOWN, LEFT, RIGHT};
+                std::vector<std::string> dirs = {UP, DOWN, RIGHT,LEFT};
                 for (const std::string& d : dirs) {
                     Point delta = dir_to_point(d);
                     Point next_head = head + delta;
