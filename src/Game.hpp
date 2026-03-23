@@ -55,9 +55,9 @@ public:
         }
     }
     bool is_all_up() const {
-        int y = body[0].y;
+        int x = body[0].x;
         for (const Point& p : body) {
-            if (p.y != y) return false;
+            if (p.x != x) return false;
         }
         return true;
     }
