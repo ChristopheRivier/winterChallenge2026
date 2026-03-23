@@ -152,6 +152,26 @@ public:
         return c == '#' || c == '1' || c == 'X';
     }
 
+    /** Voisins orthogonaux bloqués par le bord de la carte ou un mur (#, 1, X). */
+    int orthogonal_blocked_sides(const Point& p) const {
+        static const Point kDirs[4] = {Point(0, -1), Point(0, 1), Point(-1, 0), Point(1, 0)};
+        int blocked = 0;
+        for (const Point& d : kDirs) {
+            Point q = p + d;
+            if (!in_bounds(q) || is_platform(q.x, q.y)) ++blocked;
+        }
+        return blocked;
+    }
+
+    /** Retire les sources entourées sur au moins 3 côtés (un seul accès orthogonal possible). */
+    std::set<Point> filter_energy_targets(const std::set<Point>& energy) const {
+        std::set<Point> out;
+        for (const Point& e : energy) {
+            if (orthogonal_blocked_sides(e) < 3) out.insert(e);
+        }
+        return out;
+    }
+
     /** Cellules à ne pas traverser : murs + corps des autres snakes + notre corps (sauf la queue). */
     std::set<Point> blocked_cells(const std::set<Point>& my_body_set, const Point& my_tail,
                                   const std::set<Point>& others_body) const {
@@ -239,7 +259,7 @@ public:
             Point cur = path_snake.head();
             auto it = dist.find(cur);
             if (it != dist.end() && it->second <= d) return;
-            if(d > 10) return;
+            if(d > 12) return;
             dist[cur] = d;
             if (energy.count(cur)) {
             /*    std::cout << "energy found at: " << cur.x << ", " << cur.y << " d: " << d << std::endl;
@@ -324,6 +344,7 @@ public:
      *  Puis on évite que deux alliés visent la même case sur le premier pas (id plus petit prioritaire). */
     void recalculate_possible_actions(const std::set<Point>& energy) {
         clear_actions();
+        const std::set<Point> energy_targets = filter_energy_targets(energy);
 
         struct Plan {
             int id;
@@ -355,7 +376,7 @@ public:
             }
 
             Point step_dir = first_step_toward_nearest_reachable_energy(
-                snake, others_body, energy);
+                snake, others_body, energy_targets);
 
             std::string best_dir = cur_dir;
             bool found = false;
@@ -366,7 +387,7 @@ public:
             }
 
             if (!found) {
-                std::vector<std::string> dirs = {UP, DOWN, RIGHT,LEFT};
+                std::vector<std::string> dirs = {UP,RIGHT,LEFT,DOWN};
                 for (const std::string& d : dirs) {
                     Point delta = dir_to_point(d);
                     Point next_head = head + delta;
