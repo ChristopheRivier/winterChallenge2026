@@ -1,4 +1,4 @@
-all: build test
+all: build test generate_perl_code
 
 
 test:
@@ -19,3 +19,6 @@ build_debug: build_dir
 debug: build_debug
 	cd build && \
 	sudo lldb -- ./Game_test --gtest_filter=GameScenario5x5.FirstStepTowardEnergyIsLeft
+
+generate_perl_code:
+	perl concat.pl

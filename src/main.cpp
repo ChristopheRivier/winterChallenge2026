@@ -31,8 +31,14 @@ int main(int argc, char* argv[])
         cerr << "my_id=" << g.my_id << " width=" << g.width << " height=" << g.height << endl;
     }
     g.grid.resize(g.height);
+    g.nb_case_vides = g.height*g.width;
     for (int i = 0; i < g.height; i++) {
         getline(cin, g.grid[i]);
+        for (int j = 0; j < g.width; j++) {
+            if (g.grid[i][j] == '#') {
+                g.nb_case_vides--;
+            }
+        }
         if (debug) cerr << "row " << i << ": " << g.grid[i] << endl;
     }
     int snakebots_per_player;

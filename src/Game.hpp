@@ -125,6 +125,8 @@ public:
     int width = 0;
     int height = 0;
     int my_id = 0;
+    int max_depth = 12;
+    int nb_case_vides = 0;
     std::vector<std::string> grid;
     std::vector<Snakebot> my_snakebots;
     std::vector<Snakebot> opp_snakebots;
@@ -137,6 +139,22 @@ public:
         actions.clear();
     }
 
+    void define_max_depth(const std::set<Point>& energy) {
+
+        int nb_case = nb_case_vides-energy.size();
+        if (nb_case<400)
+        {
+            max_depth = 15;
+        }
+        else if (nb_case<650)
+        {
+            max_depth = 12;
+        }
+        else
+        {
+            max_depth = 9;
+        }
+    }
     /** Vide les listes de snakebots (pour les re-remplir avec l’état du tour). */
     void clear_snakebots() {
         my_snakebots.clear();
@@ -259,7 +277,7 @@ public:
             Point cur = path_snake.head();
             auto it = dist.find(cur);
             if (it != dist.end() && it->second <= d) return;
-            if(d > 12) return;
+            if(d > max_depth) return;
             dist[cur] = d;
             if (energy.count(cur)) {
             /*    std::cout << "energy found at: " << cur.x << ", " << cur.y << " d: " << d << std::endl;
@@ -344,6 +362,7 @@ public:
      *  Puis on évite que deux alliés visent la même case sur le premier pas (id plus petit prioritaire). */
     void recalculate_possible_actions(const std::set<Point>& energy) {
         clear_actions();
+        define_max_depth(energy);
         const std::set<Point> energy_targets = filter_energy_targets(energy);
 
         struct Plan {
