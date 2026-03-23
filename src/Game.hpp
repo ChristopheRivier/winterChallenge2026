@@ -54,6 +54,13 @@ public:
             it->y++;
         }
     }
+    bool is_all_up() const {
+        int y = body[0].y;
+        for (const Point& p : body) {
+            if (p.y != y) return false;
+        }
+        return true;
+    }
     /** Ensemble des cases occupées par le corps (tête incluse). */
     std::set<Point> body_set() const {
         return std::set<Point>(body.begin(), body.end());
@@ -375,7 +382,7 @@ public:
 
             /* Même case qu’au tour précédent : ne pas renvoyer la même direction (évite boucle). */
             if (found && last_head_position.count(bot.id) && head == last_head_position[bot.id]
-                && best_dir == cur_dir) {
+                && best_dir == cur_dir && snake.is_all_up()) {
                 std::vector<std::string> dirs = {UP, DOWN, LEFT, RIGHT};
                 for (const std::string& d : dirs) {
                     if (d == best_dir) continue;
